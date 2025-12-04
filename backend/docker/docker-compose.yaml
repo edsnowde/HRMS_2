@@ -1,0 +1,175 @@
+version: '3.8'
+
+services:
+  # Redis for caching and Celery broker
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MongoDB for main database
+  mongodb:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: ai_ats
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # FastAPI Application
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MONGO_URL=mongodb://admin:password@mongodb:27017/ai_ats?authSource=admin
+      - MONGO_DB_NAME=ai_ats
+      - ENVIRONMENT=development
+      - DEBUG=true
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ../app:/app/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Celery Worker for Resume Processing
+  resume-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MONGO_URL=mongodb://admin:password@mongodb:27017/ai_ats?authSource=admin
+      - MONGO_DB_NAME=ai_ats
+      - ENVIRONMENT=development
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ../app:/app/app
+    command: celery -A app.workers.celery_app worker --loglevel=info --queues=resume --concurrency=2
+
+  # Celery Worker for Scoring
+  scoring-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MONGO_URL=mongodb://admin:password@mongodb:27017/ai_ats?authSource=admin
+      - MONGO_DB_NAME=ai_ats
+      - ENVIRONMENT=development
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ../app:/app/app
+    command: celery -A app.workers.celery_app worker --loglevel=info --queues=scoring --concurrency=2
+
+  # Celery Worker for Voice/Video Processing
+  voice-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MONGO_URL=mongodb://admin:password@mongodb:27017/ai_ats?authSource=admin
+      - MONGO_DB_NAME=ai_ats
+      - ENVIRONMENT=development
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ../app:/app/app
+    command: celery -A app.workers.celery_app worker --loglevel=info --queues=voice --concurrency=1
+
+  # Celery Worker for Cleanup Tasks
+  cleanup-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MONGO_URL=mongodb://admin:password@mongodb:27017/ai_ats?authSource=admin
+      - MONGO_DB_NAME=ai_ats
+      - ENVIRONMENT=development
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ../app:/app/app
+    command: celery -A app.workers.celery_app worker --loglevel=info --queues=cleanup --concurrency=1
+
+  # Celery Beat for Scheduled Tasks
+  celery-beat:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MONGO_URL=mongodb://admin:password@mongodb:27017/ai_ats?authSource=admin
+      - MONGO_DB_NAME=ai_ats
+      - ENVIRONMENT=development
+    depends_on:
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ../app:/app/app
+    command: celery -A app.workers.celery_app beat --loglevel=info
+
+  # Flower for Celery Monitoring
+  flower:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    ports:
+      - "5555:5555"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    command: celery -A app.workers.celery_app flower --port=5555
+
+volumes:
+  redis_data:
+  mongodb_data:
+
+networks:
+  default:
+    name: ai_ats_network

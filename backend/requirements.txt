@@ -1,0 +1,73 @@
+# FastAPI and Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.23.2
+python-multipart>=0.0.6
+websockets>=11.0.3
+
+# Database
+motor>=3.3.1
+beanie>=1.22.6
+pymongo>=4.5.0
+
+# Redis and Caching
+redis
+celery
+
+# Google Cloud Services
+google-cloud-storage
+google-generativeai
+
+# AI and ML
+sentence-transformers
+google-cloud-aiplatform
+google-auth
+openai
+
+# Document Processing
+pdfminer.six
+python-docx
+PyMuPDF
+
+
+# NLP and Text Processing
+spacy
+nltk
+
+# HTTP and API
+httpx
+requests
+
+# Data Validation and Settings
+pydantic
+pydantic-settings
+email-validator
+
+# Authentication and Security
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+
+# Monitoring and Observability
+prometheus-fastapi-instrumentator>=6.0.0
+prometheus-client>=0.17.0
+opentelemetry-api>=1.20.0
+opentelemetry-sdk>=1.20.0
+opentelemetry-instrumentation-fastapi>=0.42b0
+opentelemetry-exporter-prometheus>=1.12.0rc1
+structlog>=23.1.0
+
+# Utilities
+python-dotenv
+python-dateutil
+pytz
+
+# Development and Testing
+pytest
+pytest-asyncio
+black
+isort
+flake8
+
+# Production
+gunicorn
+supervisor

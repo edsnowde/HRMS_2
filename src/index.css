@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
+
+    --primary: 186 91% 38%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 263 70% 63%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 4% 46%;
+
+    --accent: 263 70% 63%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 186 91% 38%;
+
+    --radius: 0.75rem;
+
+    /* Auralis Custom Tokens */
+    --teal: 186 91% 38%;
+    --teal-light: 186 85% 50%;
+    --teal-glow: 186 91% 45%;
+    
+    --violet: 263 70% 63%;
+    --violet-dark: 263 70% 50%;
+    --violet-glow: 263 85% 70%;
+    
+    --pink: 330 81% 60%;
+    
+    --glass-bg: 0 0% 100% / 0.05;
+    --glass-border: 0 0% 100% / 0.1;
+    
+    --aurora-1: 186 91% 38%;
+    --aurora-2: 263 70% 63%;
+    --aurora-3: 330 81% 60%;
+    
+    --glow-teal: 0 0 40px hsl(186 91% 45% / 0.4);
+    --glow-violet: 0 0 40px hsl(263 85% 70% / 0.4);
+  }
+
+  .dark {
+    --background: 240 20% 6%;
+    --foreground: 0 0% 98%;
+
+    --card: 240 15% 10%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 240 15% 10%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 186 85% 50%;
+    --primary-foreground: 240 20% 6%;
+
+    --secondary: 263 70% 63%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 240 10% 20%;
+    --muted-foreground: 240 5% 65%;
+
+    --accent: 263 70% 63%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 10% 20%;
+    --input: 240 10% 20%;
+    --ring: 186 85% 50%;
+
+    /* Dark Mode Auralis Tokens */
+    --teal: 186 85% 50%;
+    --teal-light: 186 85% 60%;
+    --teal-glow: 186 91% 55%;
+    
+    --violet: 263 70% 63%;
+    --violet-dark: 263 70% 50%;
+    --violet-glow: 263 85% 70%;
+    
+    --pink: 330 81% 65%;
+    
+    --glass-bg: 0 0% 100% / 0.05;
+    --glass-border: 0 0% 100% / 0.1;
+    
+    --aurora-1: 186 85% 50%;
+    --aurora-2: 263 70% 63%;
+    --aurora-3: 330 81% 65%;
+    
+    --glow-teal: 0 0 40px hsl(186 91% 55% / 0.5);
+    --glow-violet: 0 0 40px hsl(263 85% 70% / 0.5);
+  }
+}
+
+@layer utilities {
+  .glass {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .glass-dark {
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .glow-teal {
+    box-shadow: 0 0 40px hsl(var(--teal-glow) / 0.4);
+  }
+  
+  .glow-violet {
+    box-shadow: 0 0 40px hsl(var(--violet-glow) / 0.4);
+  }
+  
+  .text-glow-teal {
+    text-shadow: 0 0 20px hsl(var(--teal-glow) / 0.6);
+  }
+  
+  .text-glow-violet {
+    text-shadow: 0 0 20px hsl(var(--violet-glow) / 0.6);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  
+  @font-face {
+    font-family: 'Inter';
+    font-display: swap;
+    src: url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+  }
+}
