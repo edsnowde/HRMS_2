@@ -632,25 +632,47 @@ async def evaluate_interview_response_async(
                             extra={"app_id": session.application_id, "qid": qid_val, "session_id": session_id, "matched": getattr(update_result, "matched_count", None), "modified": getattr(update_result, "modified_count", None)})
 
                 if update_result.matched_count == 0:
-                    # No existing array element matched; push a new entry with feedback
-                    answer_with_feedback = {
-                        "qid": qid_val,
-                        "question": question.get("text") or question.get("question") or "",
-                        "answer": response_text,
-                        "audio_url": audio_url,
-                        "transcript": transcript,
-                        "session_id": session_id,
-                        "submitted_at": datetime.utcnow(),
-                        "feedback": feedback,
-                        "score": feedback.get("score", 0),
-                        "evaluated_at": datetime.utcnow()
-                    }
-                    push_res = await db.applications.update_one(
-                        {"$or": app_or},
-                        {"$push": {"gemini_answers": answer_with_feedback}}
-                    )
-                    logger.info("Pushed new gemini_answers entry as fallback",
-                                extra={"app_id": session.application_id, "qid": qid_val, "push_result": getattr(push_res, "raw_result", None)})
+                    # No existing array element matched for (qid + session_id).
+                    # Try a broader update by matching only on qid (covers older entries without session_id)
+                    try:
+                        alt_update = await db.applications.update_one(
+                            {"$or": app_or},
+                            {"$set": {
+                                "gemini_answers.$[elem].feedback": feedback,
+                                "gemini_answers.$[elem].score": feedback.get("score", 0),
+                                "gemini_answers.$[elem].evaluated_at": datetime.utcnow(),
+                                "gemini_answers.$[elem].session_id": session_id
+                            }},
+                            array_filters=[{"elem.qid": qid_val}]
+                        )
+                        logger.info("Attempted array_filters update for gemini_answers (qid-only)",
+                                    extra={"app_id": session.application_id, "qid": qid_val, "matched": getattr(alt_update, "matched_count", None), "modified": getattr(alt_update, "modified_count", None)})
+                    except Exception:
+                        alt_update = None
+
+                    if alt_update and getattr(alt_update, "matched_count", 0) > 0:
+                        # Successfully updated an existing element matched by qid; nothing more to do
+                        pass
+                    else:
+                        # No matching element found even by qid; push a new entry with feedback
+                        answer_with_feedback = {
+                            "qid": qid_val,
+                            "question": question.get("text") or question.get("question") or "",
+                            "answer": response_text,
+                            "audio_url": audio_url,
+                            "transcript": transcript,
+                            "session_id": session_id,
+                            "submitted_at": datetime.utcnow(),
+                            "feedback": feedback,
+                            "score": feedback.get("score", 0),
+                            "evaluated_at": datetime.utcnow()
+                        }
+                        push_res = await db.applications.update_one(
+                            {"$or": app_or},
+                            {"$push": {"gemini_answers": answer_with_feedback}}
+                        )
+                        logger.info("Pushed new gemini_answers entry as fallback",
+                                    extra={"app_id": session.application_id, "qid": qid_val, "push_result": getattr(push_res, "raw_result", None)})
             except Exception:
                 logger.exception(f"Failed to persist feedback to applications.gemini_answers for application_id={session.application_id}, session={session_id}, qid={question_id}")
             

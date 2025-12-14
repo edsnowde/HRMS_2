@@ -26,3 +26,4 @@ dist-ssr
 # Backend sensitive files
 backend/.env
 backend/gcp-sa-key.json
+frontend/.env

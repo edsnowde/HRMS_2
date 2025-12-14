@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auralis-api
+  labels:
+    app: auralis-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: auralis-api
+  template:
+    metadata:
+      labels:
+        app: auralis-api
+    spec:
+      containers:
+        - name: auralis-api
+          image: us-central1-docker.pkg.dev/hrms-476316/auralis-repo/auralis-api:v5
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          env:
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: auralis-secrets
+                  key: REDIS_URL
+            - name: MONGO_URL
+              valueFrom:
+                secretKeyRef:
+                  name: auralis-secrets
+                  key: MONGO_URL
+            - name: MONGO_DB_NAME
+              value: "ai_ats"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: auralis-secrets
+                  key: DATABASE_URL
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: auralis-secrets
+                  key: SECRET_KEY
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: auralis-secrets
+                  key: GEMINI_API_KEY
+            - name: PINECONE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: auralis-secrets
+                  key: PINECONE_API_KEY
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/secrets/gcp/key.json
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          volumeMounts:
+            - name: gcp-key
+              mountPath: /var/secrets/gcp
+              readOnly: true
+      volumes:
+        - name: gcp-key
+          secret:
+            secretName: auralis-gcp-key
+      imagePullSecrets:
+        - name: regcred

@@ -399,6 +399,37 @@ TTL: 24 hours or until job updated
 - **Vector DB**: Pinecone managed
 - **Secrets**: Secret Manager for API keys
 
+### Quick Deploy (GKE)
+This repo includes GitHub Actions to build and deploy images to GKE. If you prefer to build locally, use these commands (replace variables):
+
+```powershell
+# Login + configure
+gcloud auth login
+gcloud config set project $PROJECT
+gcloud auth configure-docker us-central1-docker.pkg.dev
+
+# Build images
+docker build --progress=plain --no-cache -f backend/docker/Dockerfile.api -t us-central1-docker.pkg.dev/$PROJECT/auralis-repo/auralis-api:latest backend
+docker build --progress=plain --no-cache -f backend/docker/Dockerfile.worker -t us-central1-docker.pkg.dev/$PROJECT/auralis-repo/auralis-worker:latest backend
+
+# Push images
+docker push us-central1-docker.pkg.dev/$PROJECT/auralis-repo/auralis-api:latest
+docker push us-central1-docker.pkg.dev/$PROJECT/auralis-repo/auralis-worker:latest
+```
+
+Create the image pull secret if not using Workload Identity:
+
+```powershell
+kubectl create secret docker-registry regcred `
+  --docker-server=us-central1-docker.pkg.dev `
+  --docker-username=_json_key `
+  --docker-password="$(Get-Content -Raw gcp-sa-key.json)" `
+  --docker-email=you@example.com
+```
+
+Then apply k8s manifests (secrets then deployments) and set images as shown in docs/deployment.md.
+
+
 ### Autoscaling Rules
 - **Workers**: Scale on Redis queue length
 - **API**: Scale on request rate and CPU

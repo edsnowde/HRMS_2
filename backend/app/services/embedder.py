@@ -15,54 +15,62 @@ class EmbedderService:
     """Service for handling embeddings and Pinecone operations (Updated SDK)."""
 
     def __init__(self):
+        # Initialize members so service can operate even if Pinecone isn't available.
+        self.pc = None
+        self.index = None
+
+        # Load the sentence transformer model first (we can still create embeddings without Pinecone)
         try:
-            # ✅ Initialize Pinecone client (new syntax)
-            self.pc = Pinecone(api_key=settings.pinecone_api_key)
-
-            # Define metadata schema
-            metadata_config = {
-                "indexed": [
-                    # Primary keys for filtering
-                    {"name": "job_id", "type": "string"},
-                    {"name": "application_id", "type": "string"},
-                    {"name": "vector_type", "type": "string"},
-                    {"name": "status", "type": "string"},
-                    # Timestamp for sorting/filtering
-                    {"name": "timestamp", "type": "string"},
-                ]
-            }
-
-            # ✅ Load the sentence transformer model once so we can infer embedding dimension
-            # NOTE: loading the model before creating the index prevents dimension mismatches
             self.model = SentenceTransformer('all-mpnet-base-v2')  # typically produces 768-d vectors
-            try:
-                embedding_dim = int(self.model.get_sentence_embedding_dimension())
-            except Exception:
-                # Fallback in case the model instance doesn't provide the helper
-                embedding_dim = 768
-
-            # ✅ Ensure index exists before connecting and use the model's dimension
-            if settings.pinecone_index_name not in self.pc.list_indexes().names():
-                logger.info(f"Index '{settings.pinecone_index_name}' not found. Creating it (dim={embedding_dim})...")
-                self.pc.create_index(
-                    name=settings.pinecone_index_name,
-                    dimension=embedding_dim,
-                    metric='cosine',
-                    metadata_config=metadata_config,
-                    spec=ServerlessSpec(
-                        cloud='aws',
-                        region='us-east-1'
-                    )
-                )
-
-            # ✅ Connect to the index
-            self.index = self.pc.Index(settings.pinecone_index_name)
-
-            logger.info(f"Pinecone initialized with index '{settings.pinecone_index_name}'")
-
         except Exception as e:
-            logger.error(f"Failed to initialize Pinecone: {str(e)}")
+            logger.error(f"Failed to load embedding model: {e}")
+            # Re-raise here because embeddings are central to many flows
             raise
+
+        # Only attempt to initialize Pinecone if an API key is configured
+        if settings.pinecone_api_key:
+            try:
+                # Initialize Pinecone client (new syntax)
+                self.pc = Pinecone(api_key=settings.pinecone_api_key)
+
+                # Define metadata schema
+                metadata_config = {
+                    "indexed": [
+                        {"name": "job_id", "type": "string"},
+                        {"name": "application_id", "type": "string"},
+                        {"name": "vector_type", "type": "string"},
+                        {"name": "status", "type": "string"},
+                        {"name": "timestamp", "type": "string"},
+                    ]
+                }
+
+                try:
+                    embedding_dim = int(self.model.get_sentence_embedding_dimension())
+                except Exception:
+                    embedding_dim = 768
+
+                # Ensure index exists before connecting and use the model's dimension
+                if settings.pinecone_index_name not in self.pc.list_indexes().names():
+                    logger.info(f"Index '{settings.pinecone_index_name}' not found. Creating it (dim={embedding_dim})...")
+                    self.pc.create_index(
+                        name=settings.pinecone_index_name,
+                        dimension=embedding_dim,
+                        metric='cosine',
+                        metadata_config=metadata_config,
+                        spec=ServerlessSpec(cloud='aws', region='us-east-1')
+                    )
+
+                # Connect to the index
+                self.index = self.pc.Index(settings.pinecone_index_name)
+                logger.info(f"Pinecone initialized with index '{settings.pinecone_index_name}'")
+
+            except Exception as e:
+                # Log but do not raise — allow app to start in degraded mode
+                logger.error(f"Failed to initialize Pinecone: {str(e)}")
+                self.pc = None
+                self.index = None
+        else:
+            logger.info("PINECONE_API_KEY not set; Pinecone client will be disabled.")
 
     def create_embedding(self, text: str) -> str:
         """Create embedding for given text and store it in Pinecone."""

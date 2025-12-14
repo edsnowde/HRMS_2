@@ -64,8 +64,15 @@ async def lifespan(app: FastAPI):
         logger.info("Database connection closed")
         
         # Close WebSocket connections
-        websocket_manager.unsubscribe_all()
-        logger.info("WebSocket connections closed")
+        # Guard against missing attribute (older instances or mocks)
+        if hasattr(websocket_manager, 'unsubscribe_all') and callable(websocket_manager.unsubscribe_all):
+            try:
+                websocket_manager.unsubscribe_all()
+                logger.info("WebSocket connections closed")
+            except Exception as e:
+                logger.error(f"Error unsubscribing websockets: {str(e)}")
+        else:
+            logger.info("WebSocket manager has no unsubscribe_all; skipping")
         
         logger.info("Application shutdown completed")
         
@@ -94,9 +101,11 @@ app.add_middleware(
 )
 
 # Add trusted host middleware
+# In production, allow all hosts because GKE load balancer and pod IPs vary
+# The important security is at the API level (auth tokens), not at host validation
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["*"] if settings.debug else ["localhost", "127.0.0.1"]
+    allowed_hosts=["*"]  # Allow all hosts; API auth provides security layer
 )
 
 
@@ -120,13 +129,17 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {
-        "status": "healthy",
-        "version": settings.api_version,
-        "environment": settings.environment,
-        "database": "connected",
-        "websocket": "active"
-    }
+    # Explicitly return 200 to satisfy readiness/liveness probes
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "healthy",
+            "version": settings.api_version,
+            "environment": settings.environment,
+            "database": "connected",
+            "websocket": "active"
+        }
+    )
 
 
 # Root endpoint
@@ -146,6 +159,13 @@ async def root():
             "Role-based Chatbot Assistant"
         ]
     }
+
+
+# Readiness endpoint (for k8s probes)
+@app.get("/ready")
+async def readiness_check():
+    """Simple readiness endpoint used by k8s liveness/readiness probes."""
+    return JSONResponse(status_code=200, content={"status": "ready"})
 
 
 # Include routers

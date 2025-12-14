@@ -16,12 +16,16 @@ celery
 # Google Cloud Services
 google-cloud-storage
 google-generativeai
+firebase-admin
 
 # AI and ML
 sentence-transformers
 google-cloud-aiplatform
 google-auth
 openai
+# Use CPU wheels for torch to reduce download size; ensure adding CPU wheel index first
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.9.1+cpu
 
 # Document Processing
 pdfminer.six
@@ -32,6 +36,8 @@ PyMuPDF
 # NLP and Text Processing
 spacy
 nltk
+# Vector DB client
+pinecone
 
 # HTTP and API
 httpx
@@ -53,7 +59,8 @@ prometheus-client>=0.17.0
 opentelemetry-api>=1.20.0
 opentelemetry-sdk>=1.20.0
 opentelemetry-instrumentation-fastapi>=0.42b0
-opentelemetry-exporter-prometheus>=1.12.0rc1
+# opentelemetry-exporter-prometheus>=1.12.0rc1  # commented out: caused pip resolution failure during Docker builds
+# If you need this exporter, pin to a resolvable version (e.g. a stable 0.xx or matching opentelemetry SDK compatibility).
 structlog>=23.1.0
 
 # Utilities

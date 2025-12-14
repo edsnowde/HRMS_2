@@ -46,6 +46,28 @@ class WebSocketManager:
         # Services
         self.notifier = NotificationService()
     
+    def unsubscribe_all(self):
+        """Shutdown: unsubscribe from all Redis channels and close connections."""
+        try:
+            # Unsubscribe from notifier's Redis channels
+            if hasattr(self.notifier, 'unsubscribe_all') and callable(self.notifier.unsubscribe_all):
+                self.notifier.unsubscribe_all()
+            
+            # Clear all active connections
+            self.active_connections.clear()
+            self.user_connections.clear()
+            self.connection_roles.clear()
+            self.connection_health.clear()
+            self.message_queue.clear()
+            self.message_history.clear()
+            self.reconnect_tokens.clear()
+            self.session_state.clear()
+            self.rate_limits.clear()
+            
+            logger.info("WebSocketManager shutdown complete")
+        except Exception as e:
+            logger.error(f"Error during WebSocketManager shutdown: {str(e)}")
+    
     async def connect(self, websocket: WebSocket, connection_id: str, user_id: str = None, role: str = None):
         """Accept WebSocket connection and register it."""
         try:

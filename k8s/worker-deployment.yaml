@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auralis-worker
+  labels:
+    app: auralis-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: auralis-worker
+  template:
+    metadata:
+      labels:
+        app: auralis-worker
+    spec:
+      containers:
+        - name: auralis-worker
+          image: us-central1-docker.pkg.dev/hrms-476316/auralis-repo/auralis-worker:latest
+          imagePullPolicy: Always
+          env:
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: auralis-secrets
+                  key: REDIS_URL
+            - name: MONGO_URL
+              valueFrom:
+                secretKeyRef:
+                  name: auralis-secrets
+                  key: MONGO_URL
+            - name: MONGO_DB_NAME
+              value: "ai_ats"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: auralis-secrets
+                  key: DATABASE_URL
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: auralis-secrets
+                  key: SECRET_KEY
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: auralis-secrets
+                  key: GEMINI_API_KEY
+            - name: PINECONE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: auralis-secrets
+                  key: PINECONE_API_KEY
+          # Command runs celery worker - override in container if needed
+          args: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info", "--concurrency=4"]
+      imagePullSecrets:
+        - name: regcred
