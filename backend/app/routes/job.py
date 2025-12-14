@@ -207,6 +207,17 @@ async def get_job_matches(job_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get("/list")
+async def list_jobs(skip: int = 0, limit: int = 10) -> Dict[str, Any]:
+    """List jobs with pagination (compatibility for frontend)."""
+    try:
+        db_service = DatabaseService()
+        return await db_service.list_jobs(skip=skip, limit=limit)
+    except Exception as e:
+        logger.error(f"Failed to list jobs: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
 @router.get("/status/{job_id}")
 async def get_job_status(job_id: str) -> Dict[str, Any]:
     """

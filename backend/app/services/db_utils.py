@@ -66,6 +66,31 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"Failed to get job: {str(e)}")
             return None
+
+    async def list_jobs(self, skip: int = 0, limit: int = 10) -> Dict[str, Any]:
+        """List jobs with pagination."""
+        try:
+            cursor = self.db.jobs.find().sort("created_at", -1).skip(int(skip)).limit(int(limit))
+            jobs = []
+            async for job in cursor:
+                try:
+                    if job.get("_id") is not None:
+                        job["_id"] = str(job.get("_id"))
+                except Exception:
+                    pass
+                jobs.append(job)
+
+            total = await self.db.jobs.count_documents({})
+
+            return {
+                "jobs": jobs,
+                "total": total,
+                "skip": int(skip),
+                "limit": int(limit),
+            }
+        except Exception as e:
+            logger.error(f"Failed to list jobs: {str(e)}")
+            return {"jobs": [], "total": 0, "skip": int(skip), "limit": int(limit)}
     
     # Candidate Management
     async def save_candidate(self, candidate_data: Dict[str, Any]) -> str:

@@ -11,7 +11,16 @@ import {
 } from './types';
 import type { ApplicationStatus } from '../types/application';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+let API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+
+// Detect common mixed-content deployment issue at runtime and warn/help.
+if (typeof window !== 'undefined' && window.location && window.location.protocol === 'https:' && API_BASE_URL && API_BASE_URL.startsWith('http://')) {
+  // Log a clear, actionable message in the browser console to help diagnose the "Failed to fetch" error.
+  // Common cause: Vercel (frontend) has `VITE_API_URL` set to an HTTP address which browsers block when page is HTTPS.
+  // Recommended fixes: remove `VITE_API_URL` from Vercel env (so frontend uses relative `/api`), or use an HTTPS backend.
+  console.error('Insecure API base URL detected: your app is served over HTTPS but VITE_API_URL is HTTP. Browsers will block this (mixed content). Remove VITE_API_URL or set it to an HTTPS URL, or rely on the /api Vercel proxy. Falling back to \'/api\' for safety.');
+  API_BASE_URL = '/api';
+}
 
 class ApiClient {
   private baseURL: string;
@@ -106,6 +115,9 @@ class ApiClient {
       return await response.text() as T;
     } catch (error) {
       console.error('API request failed:', error);
+      if (typeof window !== 'undefined' && window.location && window.location.protocol === 'https:' && API_BASE_URL && API_BASE_URL.startsWith('http://')) {
+        console.error('Possible Mixed Content: frontend is HTTPS but API base URL is HTTP. Remove VITE_API_URL or use the /api proxy on Vercel.');
+      }
       throw error;
     }
   }
