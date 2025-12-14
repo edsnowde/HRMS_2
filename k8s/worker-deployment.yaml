@@ -51,7 +51,22 @@ spec:
                 secretKeyRef:
                   name: auralis-secrets
                   key: PINECONE_API_KEY
+            - name: GCS_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: auralis-secrets
+                  key: GCS_BUCKET_NAME
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/secrets/gcp/key.json
           # Command runs celery worker - override in container if needed
           args: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info", "--concurrency=4"]
+          volumeMounts:
+            - name: gcp-key
+              mountPath: /var/secrets/gcp
+              readOnly: true
       imagePullSecrets:
         - name: regcred
+      volumes:
+        - name: gcp-key
+          secret:
+            secretName: auralis-gcp-key

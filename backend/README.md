@@ -78,6 +78,118 @@ sequenceDiagram
 
 **Failure Handling:**
 - Text extraction failure → try OCR fallback
+
+## 🛠️ Developer Notes & Recent Fixes
+
+This section documents recent changes made to stabilize the deployment, fix frontend↔backend connectivity, and resolve GCS upload errors. It also includes troubleshooting commands and diagrams to help you reproduce and verify fixes.
+
+### Summary of Changes
+- **Frontend proxy / mixed-content:** `frontend/src/lib/apiClient.ts` now falls back to `/api` at runtime when `VITE_API_URL` is insecure; `vercel.json` rewrite added and `vite.config.ts` proxy updated to support `/api` and WebSocket proxying.
+- **Job listing API:** Added `DatabaseService.list_jobs(skip, limit)` and exposed `GET /job/list` in `backend/app/routes/job.py` to serve the job list used by the UI.
+- **GCS upload checks & messaging:** `backend/app/routes/resume.py` and `backend/app/routes/application.py` now return explicit, actionable errors if Google Cloud Storage is not configured (missing `GCS_BUCKET_NAME` or credentials) instead of opaque runtime errors.
+- **Kubernetes manifests:** Added `GCS_BUCKET_NAME` env and a mount for the `auralis-gcp-key` secret to both `k8s/api-deployment.yaml` and `k8s/worker-deployment.yaml` so API and workers can access GCS credentials.
+- **Docs & troubleshooting:** Expanded `backend/README.md` with exact `kubectl` commands to create/patch secrets, restart deployments, and test GCS connectivity using `backend/test_gcp.py`.
+
+### Architecture Diagram
+```mermaid
+graph TD
+  Frontend[Frontend (Vercel / Browser)] -->|HTTPS /api| FastAPI[FastAPI API (GKE)]
+  FastAPI -->|enqueue| Redis[Redis (Celery broker)]
+  FastAPI -->|store files| GCS[Google Cloud Storage]
+  Redis -->|tasks| Worker[Celery Workers]
+  Worker -->|download/process| GCS
+  Worker -->|embeddings| Pinecone[Pinecone]
+  Worker -->|persist| MongoDB[MongoDB Atlas]
+  FastAPI -->|websockets| WebSocket[WebSocket Manager]
+  WebSocket --> Frontend
+```
+
+### How to reproduce the previously-seen GCS failure
+Error observed in pods: CreateContainerConfigError with event: "Error: couldn't find key GCS_BUCKET_NAME in Secret auralis/auralis-secrets"
+
+1. The cause was that `auralis-secrets` either didn't contain `GCS_BUCKET_NAME` or was created in the wrong namespace. This prevented the pod from starting because the deployment references the secret key as an env var.
+2. Fix applied: create/patch the `auralis-secrets` in namespace `auralis` and mount the `auralis-gcp-key` secret as a file at `/var/secrets/gcp/key.json` (the deployment already sets `GOOGLE_APPLICATION_CREDENTIALS=/var/secrets/gcp/key.json`).
+
+### Commands (PowerShell) — create/patch secrets safely
+```powershell
+# Upload GCP service account key as a secret (from repo key file)
+kubectl create secret generic auralis-gcp-key --from-file=key.json=backend/gcp-sa-key.json -n auralis --dry-run=client -o yaml | kubectl apply -f -
+
+# Set or patch the bucket name inside auralis-secrets (non-destructive)
+kubectl create secret generic auralis-secrets --from-literal=GCS_BUCKET_NAME=hrms-resumes-bucket -n auralis --dry-run=client -o yaml | kubectl apply -f -
+
+# Merge additional service keys without overwriting existing values (here-string)
+$patch = @'
+{"stringData":{
+  "REDIS_URL":"redis://redis:6379/0",
+  "MONGO_URL":"mongodb+srv://...",
+  "DATABASE_URL":"mongodb+srv://...",
+  "SECRET_KEY":"<your_secret>",
+  "GEMINI_API_KEY":"<your_gemini_key>",
+  "PINECONE_API_KEY":"<your_pinecone_key>"
+}}
+'@
+kubectl patch secret auralis-secrets -n auralis --type='merge' -p $patch
+
+# Restart and check pods
+kubectl rollout restart deployment/auralis-api -n auralis
+kubectl rollout restart deployment/auralis-worker -n auralis
+kubectl get pods -n auralis
+kubectl describe pod <failing-pod-name> -n auralis
+kubectl logs -l app=auralis-api -n auralis --tail=200
+```
+
+### How to verify GCS credentials locally
+```powershell
+#$env:GOOGLE_APPLICATION_CREDENTIALS='backend/gcp-sa-key.json'; $env:GCS_BUCKET_NAME='hrms-resumes-bucket'; python .\backend\test_gcp.py
+```
+
+If `test_gcp.py` lists your bucket(s) it means credentials and bucket are valid.
+
+### Other useful checks
+- `kubectl get secret auralis-secrets -n auralis -o yaml` — inspect secret keys
+- `kubectl get events -n auralis --sort-by=.metadata.creationTimestamp` — cluster events
+- `kubectl describe pod <pod> -n auralis` — pod events and reasons for container startup failures
+
+### End-to-end verification checklist
+1. Ensure `auralis-gcp-key` and `auralis-secrets` exist in `auralis` namespace and contain required keys.  
+2. Restart `auralis-api` and `auralis-worker`.  
+3. Upload a resume via the frontend (or POST directly to `/resume/upload`).  
+4. Confirm worker dequeues the job, downloads the file from GCS, processes it, and updates job status in MongoDB.  
+5. Confirm no 500 errors from `/resume/upload` and resume object appears in GCS and MongoDB.
+
+---
+
+If you'd like, I can also add a short `DEPLOYMENT.md` with a one-line script to apply secrets and restart the cluster, or generate a small PNG/SVG flowchart and commit it in `docs/` if you prefer images over Mermaid. Tell me which you'd prefer and I'll add it.
+
+## **GCP Deployment (Detailed)**
+
+Below is an operator-focused explanation of how the backend is deployed on GCP and how components should be configured and verified.
+
+### Service account & IAM
+- Create `auralis-sa` service account and grant `roles/storage.objectAdmin` (or narrower permissions). Generate a JSON key and store as `auralis-gcp-key` in K8s (`kubectl create secret generic auralis-gcp-key --from-file=key.json=path/to/key.json -n auralis`).
+
+### Secrets & environment variables
+- `auralis-secrets` should contain: `REDIS_URL`, `MONGO_URL`, `DATABASE_URL`, `SECRET_KEY`, `GEMINI_API_KEY`, `PINECONE_API_KEY`, `GCS_BUCKET_NAME`.
+- Use `kubectl patch secret auralis-secrets -n auralis` to add missing keys without overwriting existing values.
+
+### Kubernetes manifest notes
+- `api-deployment.yaml` and `worker-deployment.yaml` include a volume mount for `auralis-gcp-key` at `/var/secrets/gcp` and set `GOOGLE_APPLICATION_CREDENTIALS=/var/secrets/gcp/key.json`.
+- Keep probes short and reliable; prefer TCP probes for simple readiness on port 8000.
+
+### CI/CD recommendations
+- Use Cloud Build or GitHub Actions to build and push images, run unit tests, and apply manifests.
+- Tag images and use `kubectl set image` or `kubectl apply` with new manifests for controlled rollouts.
+
+### Observability & troubleshooting
+- Check `kubectl describe pod <pod> -n auralis` for secret/key-related startup failures.
+- `kubectl get events -n auralis --sort-by=.metadata.creationTimestamp` shows cluster-level events.
+- `backend/test_gcp.py` validates GCS access with the mounted service account key.
+
+### Merit of current approach
+- Mounting service account keys as secrets is simple and straightforward; for production, consider using Workload Identity (recommended) or Secret Manager to avoid distributing static JSON keys.
+
+If you want I will create `docs/deployment.md` that includes a GitHub Actions workflow snippet, step-by-step `kubectl` scripts, and an exported SVG of the flowchart for easy inclusion in documentation.
 - Embedding creation failure → use cached embedding
 - Worker failure → retry with exponential backoff
 
@@ -429,6 +541,56 @@ kubectl create secret docker-registry regcred `
 
 Then apply k8s manifests (secrets then deployments) and set images as shown in docs/deployment.md.
 
+### Google Cloud Storage (GCS) Setup
+
+If you see errors like "Google Cloud Storage client not configured. Set credentials or GCS bucket name.", it means the API cannot find a configured GCS bucket and/or credentials. To fix:
+
+1. Create a GCS bucket (if you don't have one):
+
+```bash
+gsutil mb -p YOUR_PROJECT_ID -l us-central1 gs://your-gcs-bucket-name
+```
+
+2. Create a service account with Storage permissions and download the JSON key:
+
+```bash
+gcloud iam service-accounts create auralis-sa --display-name "Auralis Service Account"
+gcloud projects add-iam-policy-binding $PROJECT --member="serviceAccount:auralis-sa@$PROJECT.iam.gserviceaccount.com" --role="roles/storage.objectAdmin"
+gcloud iam service-accounts keys create gcp-sa-key.json --iam-account=auralis-sa@$PROJECT.iam.gserviceaccount.com
+```
+
+3. Create or update the Kubernetes secrets (in `auralis` namespace):
+
+```bash
+# Upload service account key as a secret
+kubectl create secret generic auralis-gcp-key --from-file=key.json=gcp-sa-key.json -n auralis --dry-run=client -o yaml | kubectl apply -f -
+
+# Add your bucket name to existing secrets (or create a new secret) so the deployment can read it
+kubectl create secret generic auralis-secrets --from-literal=GCS_BUCKET_NAME=hrms-resumes-bucket -n auralis --dry-run=client -o yaml | kubectl apply -f -
+
+# Example: create the GCP key secret from the repo's key file and apply (PowerShell/CMD)
+kubectl create secret generic auralis-gcp-key --from-file=key.json=backend/gcp-sa-key.json -n auralis --dry-run=client -o yaml | kubectl apply -f -
+```
+
+4. Confirm `api-deployment.yaml` has the secret mounted and `GOOGLE_APPLICATION_CREDENTIALS` set (this repo's k8s manifest mounts `/var/secrets/gcp/key.json`). If you changed paths, set `GCS_CREDENTIALS_PATH` or `GOOGLE_APPLICATION_CREDENTIALS` env var in the deployment.
+
+5. Restart the deployment and check logs:
+
+```bash
+kubectl rollout restart deployment/auralis-api -n auralis
+kubectl logs -l app=auralis-api -n auralis --tail=200
+```
+
+6. For local testing, set env vars in `.env` (used by `app/config.py`) and run `backend/test_gcp.py`:
+
+```
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/gcp-sa-key.json
+GCS_BUCKET_NAME=hrms-resumes-bucket
+python test_gcp.py
+```
+
+If `test_gcp.py` lists your bucket(s), GCS is configured correctly.
+
 
 ### Autoscaling Rules
 - **Workers**: Scale on Redis queue length
@@ -619,6 +781,29 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - **Health Check**: http://localhost:8000/health
 - **Metrics**: http://localhost:8000/metrics
 - **Flower**: http://localhost:5555
+
+### Docker (local dev + CI)
+
+This project uses Docker both for local development (via `docker-compose`) and for CI image builds that are pushed to Artifact Registry/GCR for deployment to GKE.
+
+- **Local development (`docker-compose`)**
+  - `docker/docker-compose.yaml` spins up `redis` and `mongodb` so you can run the API and workers locally without external services.
+  - Start local infra: `docker-compose -f docker/docker-compose.yaml up -d redis mongodb`
+  - Check logs/status: `docker-compose -f docker/docker-compose.yaml ps` and `docker-compose -f docker/docker-compose.yaml logs -f api`
+
+- **Production image builds (CI)**
+  - `backend/docker/Dockerfile.api` and `backend/docker/Dockerfile.worker` build the production images for the API and worker.
+  - CI (Cloud Build / GitHub Actions) should build and push images to Artifact Registry (e.g., `us-central1-docker.pkg.dev/$PROJECT/auralis-repo/auralis-api:$TAG`) for GKE deployments.
+
+### Docker flow (development → CI → GKE)
+```mermaid
+flowchart LR
+  Dev[Developer Laptop] -->|docker-compose| LocalInfra[Redis + Mongo]
+  Dev -->|docker build| LocalImage[API & Worker Images]
+  CI[GitHub Actions / Cloud Build] -->|build/push| Registry[Artifact Registry / GCR]
+  Registry -->|deploy| GKE[GKE Cluster]
+  LocalInfra -->|used by| DevServices[API/Worker (local)]
+```
 
 ### Docker Deployment
 

@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { GlassButton } from "../components/GlassButton";
 import { GlassCard } from "../components/GlassCard";
 import { AuroraBackground } from "../components/AuroraBackground";
-import { Mail, Lock, ArrowLeft } from "lucide-react";
+import { Mail, Lock, ArrowLeft, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
@@ -168,17 +168,21 @@ export default function Login() {
 
             <div className="mt-2">
               <label className="block text-sm font-medium mb-2">Select Role</label>
-              <select
-                value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value as any)}
-                className="w-full glass pr-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-              >
-                <option value="candidate">Candidate</option>
-                <option value="employee">Employee</option>
-                <option value="recruiter">Recruiter</option>
-                <option value="hr">HR</option>
-                <option value="admin">Admin</option>
-              </select>
+              <div className="relative">
+                <select
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value as any)}
+                  aria-label="Select role"
+                  className="w-full appearance-none glass pr-10 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/60 transition-all text-foreground"
+                >
+                  <option value="candidate">Candidate</option>
+                  <option value="employee">Employee</option>
+                  <option value="recruiter">Recruiter</option>
+                  <option value="hr">HR</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
+              </div>
             </div>
 
             <GlassButton

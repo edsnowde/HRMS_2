@@ -144,6 +144,13 @@ async def upload_resume(
         
         # Initialize services
         storage = StorageService()
+
+        # Ensure GCS configured and give actionable error
+        if not getattr(storage, 'bucket', None):
+            raise HTTPException(status_code=500, detail=(
+                "Google Cloud Storage not configured. Set `GCS_BUCKET_NAME` and provide credentials via "
+                "`GCS_CREDENTIALS_PATH` or `GOOGLE_APPLICATION_CREDENTIALS` (mounted secret) and restart the API."))
+
         db = DatabaseService()
         audit = AuditLogger()
         

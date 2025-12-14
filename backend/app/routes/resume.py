@@ -39,6 +39,15 @@ async def upload_resume(file: UploadFile = File(...)) -> Dict[str, Any]:
         
         # Initialize services
         storage_service = StorageService()
+
+        # Helpful configuration check: if storage isn't initialized, return actionable error
+        if not getattr(storage_service, 'bucket', None):
+            raise HTTPException(
+                status_code=500,
+                detail=("Google Cloud Storage not configured. "
+                        "Set `GCS_BUCKET_NAME` and provide credentials via `GCS_CREDENTIALS_PATH` "
+                        "or `GOOGLE_APPLICATION_CREDENTIALS` (mounted secret) and restart the API.")
+            )
         db_service = DatabaseService()
         
         # Upload file to GCS
@@ -261,6 +270,11 @@ async def batch_upload_resumes(files: list[UploadFile] = File(...)) -> Dict[str,
             raise HTTPException(status_code=400, detail="Maximum 10 files allowed per batch")
         
         storage_service = StorageService()
+        # Ensure GCS configured
+        if not getattr(storage_service, 'bucket', None):
+            raise HTTPException(status_code=500, detail=(
+                "Google Cloud Storage not configured. Set `GCS_BUCKET_NAME` and provide credentials via "
+                "`GCS_CREDENTIALS_PATH` or `GOOGLE_APPLICATION_CREDENTIALS` (mounted secret) and restart the API."))
         db_service = DatabaseService()
         
         job_ids = []

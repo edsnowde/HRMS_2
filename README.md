@@ -180,3 +180,86 @@ A comprehensive Human Resource Management System (HRMS) with Applicant Tracking 
   - Add richer debug logs that dump `gemini_answers` before update when matched_count is 0.
 
   Pick one and I'll proceed.
+
+  ## **Backend Deployment & Production Flow (GCP + Vercel)**
+
+  This project showcases backend engineering and deployment practices: a FastAPI backend + Celery workers deployed on GKE, files stored in Google Cloud Storage (GCS), and a frontend hosted on Vercel which proxies API calls to the backend.
+
+  ### **Concise Architecture**
+  ```mermaid
+  graph LR
+    subgraph CI
+      A[GitHub Actions / Cloud Build]
+    end
+    A --> B[Build images & push to Artifact Registry]
+    B --> C[GKE Cluster]
+    subgraph GKE[GKE]
+      D[auralis-api (FastAPI)]
+      D --> Auth[Auth]
+      D --> ResumeUpload[Resume upload]
+      D --> InterviewAPIs[Interview APIs]
+
+      E[auralis-worker (Celery)]
+      E --> ResumeParsing[Resume parsing]
+      E --> PineconeEmbedding[Pinecone embedding]
+      E --> GeminiScoring[Gemini scoring]
+
+      EX[Redis + Mongo + GCS (external)]
+    end
+    C --> GKE
+    D & E --> F[auralis-gcp-key Secret mounted at /var/secrets/gcp/key.json]
+    D & E --> G[auralis-secrets (env values)]
+    D & E --> H[GCS (resumes, files)]
+    Vercel -->|rewrite /api| D
+  ```
+
+  ### **GCP deployment details**
+  - **Service Account**: Create a service account with `roles/storage.objectAdmin` (or narrower scoped roles if desired). Create a JSON key and store it as `auralis-gcp-key` in Kubernetes (or use Secret Manager).
+  - **GCS Bucket**: Create `hrms-resumes-bucket` (or your own). The bucket name is stored in `auralis-secrets` as `GCS_BUCKET_NAME` and read via app settings.
+  - **Artifact Registry**: CI builds backend images and pushes them to Artifact Registry or GCR. Use immutable tags for production releases.
+  - **Kubernetes Manifests**: `k8s/api-deployment.yaml` and `k8s/worker-deployment.yaml` expect:
+    - `auralis-gcp-key` secret mounted at `/var/secrets/gcp` and `GOOGLE_APPLICATION_CREDENTIALS=/var/secrets/gcp/key.json`
+    - `auralis-secrets` containing Redis/Mongo/API keys and `GCS_BUCKET_NAME`
+    - Readiness/liveness probes on port 8000
+  - **Ingress & NEG**: Use GKE Ingress with NEG for LB-backed L7 routing and health checks.
+
+  ## **Docker: Local dev and CI usage**
+
+  Docker is used in two places: local development (via `docker-compose`) and CI/build pipelines (image build & push).
+
+  - **Local development**: `docker/docker-compose.yaml` spins up the minimal infra (Redis, MongoDB) for developers to run the API and workers locally. This removes the need for external services and mirrors production dependencies.
+    - Start local infra: `docker-compose -f docker/docker-compose.yaml up -d redis mongodb`
+    - Useful for running `backend` tests and local worker processing.
+
+  - **Image builds & CI**: The `backend/docker/Dockerfile.api` and `backend/docker/Dockerfile.worker` build the production images for the API and worker respectively. CI (Cloud Build or GitHub Actions) builds these images and pushes them to Artifact Registry/GCR, which are then deployed to GKE.
+    - Build locally: `docker build -f backend/docker/Dockerfile.api -t us-central1-docker.pkg.dev/$PROJECT/auralis-repo/auralis-api:latest backend`
+    - Push: `docker push us-central1-docker.pkg.dev/$PROJECT/auralis-repo/auralis-api:latest`
+
+  ### Docker flowchart
+  ```mermaid
+  flowchart LR
+    Dev[Developer Laptop] -->|docker-compose| LocalInfra[Redis + Mongo]
+    Dev -->|docker build| LocalImage[API & Worker Images]
+    CI -->|build/push| Registry[Artifact Registry / GCR]
+    Registry -->|deploy| GKE[GKE Cluster]
+    LocalInfra -->|used by| DevServices[API/Worker (local)]
+  ```
+
+  ### **Vercel frontend notes**
+  - **Rewrite /api**: In `vercel.json` rewrite `/api/:path*` to your backend domain to avoid mixed-content errors when frontend is served over HTTPS.
+  - **Environment variables**: Set `VITE_API_URL` and `VITE_WS_URL` in Vercel dashboard; the frontend falls back to `/api` at runtime in case of mixed-content.
+  - **Websockets**: Ensure Vercel or your proxy supports WebSocket upgrades (used for job status updates).
+
+  ### **Deployment checklist (operator)**
+  1. Build & push images (CI): tag with `vX.Y.Z` and push to Artifact Registry.  
+  2. Create/patch `auralis-gcp-key` and `auralis-secrets` (in `auralis` namespace).  
+  3. kubectl apply -f k8s/api-deployment.yaml && kubectl apply -f k8s/worker-deployment.yaml  
+  4. kubectl rollout restart deployment/auralis-api -n auralis  
+  5. Confirm pods ready and check logs (`kubectl get pods -n auralis`, `kubectl logs -l app=auralis-api -n auralis`)  
+  6. On Vercel, verify rewrite is active and `VITE_API_URL` points to `https://<your-backend>` or rely on the `/api` fallback.
+
+  ### **Common issues & fixes**
+  - CreateContainerConfigError: missing secret key referenced in deployment (check `auralis-secrets` in `auralis`).  
+  - GCS upload: ensure `GCS_BUCKET_NAME` exists and `auralis-gcp-key` is mounted; run `backend/test_gcp.py` locally to verify.  
+  - Mixed-content: ensure `/api` is proxied via Vercel or `/api` fallback is used by frontend.
+
