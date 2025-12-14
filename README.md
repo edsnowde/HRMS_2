@@ -189,7 +189,7 @@ A comprehensive Human Resource Management System (HRMS) with Applicant Tracking 
   ```mermaid
   graph LR
     subgraph CI
-      A[GitHub Actions / Cloud Build]
+      A[GitHub Actions and Cloud Build]
     end
     A --> B[Build images & push to Artifact Registry]
     B --> C[GKE Cluster]
@@ -204,13 +204,16 @@ A comprehensive Human Resource Management System (HRMS) with Applicant Tracking 
       E --> PineconeEmbedding[Pinecone embedding]
       E --> GeminiScoring[Gemini scoring]
 
-      EX[Redis + Mongo + GCS (external)]
+      EX[Redis and Mongo and GCS (external)]
     end
     C --> GKE
-    D & E --> F[auralis-gcp-key Secret mounted at /var/secrets/gcp/key.json]
-    D & E --> G[auralis-secrets (env values)]
-    D & E --> H[GCS (resumes, files)]
-    Vercel -->|rewrite /api| D
+    D --> F[auralis-gcp-key Secret mounted at /var/secrets/gcp/key.json]
+    E --> F[auralis-gcp-key Secret mounted at /var/secrets/gcp/key.json]
+    D --> G[auralis-secrets (env values)]
+    E --> G[auralis-secrets (env values)]
+    D --> H[GCS (resumes, files)]
+    E --> H[GCS (resumes, files)]
+    Vercel[Vercel] -->|rewrite /api| D
   ```
 
   ### **GCP deployment details**
@@ -238,11 +241,11 @@ A comprehensive Human Resource Management System (HRMS) with Applicant Tracking 
   ### Docker flowchart
   ```mermaid
   flowchart LR
-    Dev[Developer Laptop] -->|docker-compose| LocalInfra[Redis + Mongo]
-    Dev -->|docker build| LocalImage[API & Worker Images]
-    CI -->|build/push| Registry[Artifact Registry / GCR]
+    Dev[Developer Laptop] -->|docker-compose| LocalInfra[Redis and Mongo]
+    Dev -->|docker build| LocalImage[API and Worker Images]
+    CI -->|build/push| Registry[Artifact Registry and GCR]
     Registry -->|deploy| GKE[GKE Cluster]
-    LocalInfra -->|used by| DevServices[API/Worker (local)]
+    LocalInfra --> DevServices[API and Worker (local)]
   ```
 
   ### **Vercel frontend notes**

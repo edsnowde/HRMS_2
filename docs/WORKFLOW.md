@@ -7,21 +7,21 @@ This document presents a single, comprehensive workflow that covers the frontend
 ```mermaid
 flowchart LR
   %% External Actors
-  U[Candidate / Recruiter / User (Browser)] -->|HTTPS| Vercel[Vercel (Frontend)]
+  U[Candidate, Recruiter, User (Browser)] -->|HTTPS| Vercel[Vercel (Frontend)]
 
   subgraph Frontend
-    Vercel -->|/api (rewrites) / WebSocket| Client[React App]
+    Vercel -->|/api (rewrites) & WebSocket| Client[React App]
   end
 
   %% GKE and services
-  subgraph CI[CI / Build]
-    CIAction[GitHub Actions / Cloud Build] -->|build & push| Registry[Artifact Registry / GCR]
+  subgraph CI[CI and Build]
+    CIAction[GitHub Actions and Cloud Build] -->|build & push| Registry[Artifact Registry and GCR]
   end
 
   subgraph GKE[GKE Cluster]
     subgraph API[auralis-api (FastAPI)]
       APIAuth[Auth (Firebase JWT verify)]
-      ResumeRoute[POST /resume/upload]
+      ResumeRoute[POST /resume upload]
       InterviewRoutes[Interview APIs]
       JobRoutes[Job listing & match endpoints]
       Websocket[WebSocket manager]
@@ -36,7 +36,7 @@ flowchart LR
       ResumeWorker[Resume parsing task]
       EmbedWorker[Embedding & Pinecone upsert]
       ScoreWorker[Gemini scoring & feedback]
-      CleanupWorker[cleanup/maintenance]
+      CleanupWorker[cleanup and maintenance]
       ResumeWorker --> Storage
       ResumeWorker --> EmbedWorker
       EmbedWorker --> Pinecone[Pinecone]
@@ -47,16 +47,19 @@ flowchart LR
     RedisQueue --> Worker
     Storage -->|store files| GCS[(GCS bucket)]
     Mongo[(MongoDB Atlas)]
-    Redis[(Redis / Cloud Memorystore)]
+    Redis[(Redis - Cloud Memorystore)]
   end
 
   %% Observability & Secrets
-  API & Worker -->|metrics| Prom[Prometheus/Grafana]
-  API & Worker -->|logs| Logging[Cloud Logging / Stackdriver]
-  API & Worker -->|secrets| K8sSecrets[auralis-secrets / auralis-gcp-key]
+  API -->|metrics| Prom[Prometheus and Grafana]
+  Worker -->|metrics| Prom[Prometheus and Grafana]
+  API -->|logs| Logging[Cloud Logging and Stackdriver]
+  Worker -->|logs| Logging[Cloud Logging and Stackdriver]
+  API -->|secrets| K8sSecrets[auralis-secrets and auralis-gcp-key]
+  Worker -->|secrets| K8sSecrets[auralis-secrets and auralis-gcp-key]
 
   %% Local development with Docker
-  Dev[Developer Laptop] -->|docker-compose| LocalInfra[Redis + Mongo (Docker Compose)]
+  Dev[Developer Laptop] -->|docker-compose| LocalInfra[Redis and Mongo (Docker Compose)]
   Dev -->|dev server| Client
 
   %% Deployment flow

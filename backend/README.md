@@ -93,7 +93,7 @@ This section documents recent changes made to stabilize the deployment, fix fron
 ### Architecture Diagram
 ```mermaid
 graph TD
-  Frontend[Frontend (Vercel / Browser)] -->|HTTPS /api| FastAPI[FastAPI API (GKE)]
+  Frontend[Frontend (Vercel & Browser)] -->|HTTPS| FastAPI[FastAPI API (GKE)]
   FastAPI -->|enqueue| Redis[Redis (Celery broker)]
   FastAPI -->|store files| GCS[Google Cloud Storage]
   Redis -->|tasks| Worker[Celery Workers]
@@ -798,11 +798,11 @@ This project uses Docker both for local development (via `docker-compose`) and f
 ### Docker flow (development → CI → GKE)
 ```mermaid
 flowchart LR
-  Dev[Developer Laptop] -->|docker-compose| LocalInfra[Redis + Mongo]
-  Dev -->|docker build| LocalImage[API & Worker Images]
-  CI[GitHub Actions / Cloud Build] -->|build/push| Registry[Artifact Registry / GCR]
+  Dev[Developer Laptop] -->|docker-compose| LocalInfra[Redis and Mongo]
+  Dev -->|docker build| LocalImage[API and Worker Images]
+  CI[GitHub Actions and Cloud Build] -->|build/push| Registry[Artifact Registry and GCR]
   Registry -->|deploy| GKE[GKE Cluster]
-  LocalInfra -->|used by| DevServices[API/Worker (local)]
+  LocalInfra --> DevServices[API and Worker (local)]
 ```
 
 ### Docker Deployment
