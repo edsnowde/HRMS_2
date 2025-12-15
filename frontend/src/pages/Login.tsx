@@ -173,15 +173,15 @@ export default function Login() {
                   value={selectedRole}
                   onChange={(e) => setSelectedRole(e.target.value as any)}
                   aria-label="Select role"
-                  className="w-full appearance-none glass pr-10 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/60 transition-all text-foreground"
-                >
-                  <option value="candidate">Candidate</option>
-                  <option value="employee">Employee</option>
-                  <option value="recruiter">Recruiter</option>
-                  <option value="hr">HR</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
+                  className="w-full appearance-none bg-black text-white pr-10 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/60 transition-all"
+    >
+      <option value="candidate">Candidate</option>
+      <option value="employee">Employee</option>
+      <option value="recruiter">Recruiter</option>
+      <option value="hr">HR</option>
+      <option value="admin">Admin</option>
+    </select>
+    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
               </div>
             </div>
 

@@ -41,7 +41,15 @@ export default function Landing(): JSX.Element {
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-[#f4f7ff] via-white to-[#e9edff] text-gray-900">
       {/* 🌈 Floating Aura Background Animation */}
-      <div className="absolute inset-0 overflow-hidden -z-10">
+      <div className="absolute inset-0 overflow-hidden">
+        {/* Decorative blended logo (subtle, low-opacity, blurred background) */}
+        <img
+          src="/logo2.png"
+          aria-hidden="true"
+          alt=""
+          className="absolute inset-x-0 top-[400px] mx-auto w-[100%]  max-w-[1200px] pointer-events-none select-none "
+        />
+
         {/* Subtle glowing gradient circles */}
         <div className="absolute -top-20 -left-20 w-96 h-96 bg-gradient-to-br from-violet-400/30 to-blue-400/30 rounded-full blur-3xl animate-pulse-slow" />
         <div className="absolute bottom-10 right-10 w-[500px] h-[500px] bg-gradient-to-tr from-blue-400/30 to-violet-400/30 rounded-full blur-3xl animate-pulse-slow" />
@@ -170,10 +178,10 @@ export default function Landing(): JSX.Element {
               <h3 className="text-3xl font-bold mb-6 bg-gradient-to-r from-teal-500 to-violet-500 bg-clip-text text-transparent">
                 What is Auralis?
               </h3>
-              <p className="text-lg text-gray-600 mb-4">
+              <p className="text-lg font-bold text-gray-600 mb-4">
                 <b>Auralis</b> — From “aura” + “analysis” — symbolizes an intelligent aura guiding HR.
               </p>
-              <p className="text-lg text-gray-500">
+              <p className="text-lg font-bold text-gray-500">
                 Built with cutting-edge technology and designed for the modern workforce,
                 Auralis transforms how organizations manage their most valuable asset — people.
               </p>
