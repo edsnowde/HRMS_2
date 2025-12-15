@@ -5,7 +5,7 @@
 A comprehensive Human Resource Management System (HRMS) with Applicant Tracking System (ATS) powered by AI, featuring real-time processing and intelligent candidate matching. NOTE: this repository is currently scoped to a text-first ATS workflow — voice/video interview analysis and audio STT flows have been removed from the mainline to simplify the stack and dependencies. Text-based interview generation and LLM scoring remain fully supported.
 
 ## 🎯 Implementation Status (October 2025)
-
+DEMO VIDEO: https://drive.google.com/file/d/1YjKf8x-dTNZHciMD9hoEv8ABSex8-yfx/view?usp=sharing
 ### ✅ Core Components (Fully Implemented)
 - **FastAPI Backend**: Enhanced API gateway with comprehensive monitoring
 - **MongoDB Integration**: Optimized data models with full indexing
