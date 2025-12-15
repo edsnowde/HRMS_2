@@ -4,73 +4,46 @@ This document presents a single, comprehensive workflow that covers the frontend
 
 ## Full Workflow Diagram
 
-```mermaid
-flowchart LR
-  %% External Actors
-  U[Candidate, Recruiter, User (Browser)] -->|HTTPS| Vercel[Vercel (Frontend)]
+```
+Browser (Candidate / Recruiter / User)
+  |
+  v
+Vercel (Frontend)
+  |
+  v
+React Client
+  |
+  v
+auralis-api (FastAPI) [GKE]
+  - Auth (Firebase JWT verify)
+  - POST resume upload -> GCS (uses GCS_BUCKET_NAME)
+  - Enqueue tasks -> Redis (Celery broker)
+  - Job endpoints -> MongoDB
+  - WebSocket manager -> clients
 
-  subgraph Frontend
-    Vercel -->|/api (rewrites) & WebSocket| Client[React App]
-  end
+auralis-worker (Celery) [GKE]
+  - Listens to Redis queue
+  - Downloads from GCS, parses, creates embeddings
+  - Upserts embedding -> Pinecone
+  - Persists results -> MongoDB
 
-  %% GKE and services
-  subgraph CI[CI and Build]
-    CIAction[GitHub Actions and Cloud Build] -->|build & push| Registry[Artifact Registry and GCR]
-  end
+Shared Infra:
+  - Redis (Cloud Memorystore)
+  - MongoDB Atlas
+  - GCS bucket (resumes)
 
-  subgraph GKE[GKE Cluster]
-    subgraph API[auralis-api (FastAPI)]
-      APIAuth[Auth (Firebase JWT verify)]
-      ResumeRoute[POST /resume upload]
-      InterviewRoutes[Interview APIs]
-      JobRoutes[Job listing & match endpoints]
-      Websocket[WebSocket manager]
-      APIAuth --> ResumeRoute
-      ResumeRoute -->|env: GCS_BUCKET_NAME| Storage[GCS]
-      ResumeRoute -->|enqueue| RedisQueue[Redis (Celery broker)]
-      JobRoutes --> Mongo[MongoDB]
-      Websocket --> Client
-    end
+Observability & Secrets:
+  - Metrics -> Prometheus / Grafana
+  - Logs -> Cloud Logging
+  - Secrets -> auralis-secrets, auralis-gcp-key (mounted)
 
-    subgraph Worker[auralis-worker (Celery)]
-      ResumeWorker[Resume parsing task]
-      EmbedWorker[Embedding & Pinecone upsert]
-      ScoreWorker[Gemini scoring & feedback]
-      CleanupWorker[cleanup and maintenance]
-      ResumeWorker --> Storage
-      ResumeWorker --> EmbedWorker
-      EmbedWorker --> Pinecone[Pinecone]
-      ScoreWorker --> Mongo
-    end
+Local dev:
+  - Developer Laptop -> docker-compose (Redis + Mongo)
+  - Frontend dev server -> React Client
 
-    %% Shared infra
-    RedisQueue --> Worker
-    Storage -->|store files| GCS[(GCS bucket)]
-    Mongo[(MongoDB Atlas)]
-    Redis[(Redis - Cloud Memorystore)]
-  end
-
-  %% Observability & Secrets
-  API -->|metrics| Prom[Prometheus and Grafana]
-  Worker -->|metrics| Prom[Prometheus and Grafana]
-  API -->|logs| Logging[Cloud Logging and Stackdriver]
-  Worker -->|logs| Logging[Cloud Logging and Stackdriver]
-  API -->|secrets| K8sSecrets[auralis-secrets and auralis-gcp-key]
-  Worker -->|secrets| K8sSecrets[auralis-secrets and auralis-gcp-key]
-
-  %% Local development with Docker
-  Dev[Developer Laptop] -->|docker-compose| LocalInfra[Redis and Mongo (Docker Compose)]
-  Dev -->|dev server| Client
-
-  %% Deployment flow
-  Registry -->|images| GKE
-
-  %% Error paths
-  API -->|if missing secret| CreateErr[CreateContainerConfigError]
-  ResumeRoute -->|if GCS not configured| GcsErr[500: 'Google Cloud Storage client not configured']
-
-  style CreateErr fill:#fab,stroke:#900
-  style GcsErr fill:#fdd,stroke:#900
+Error cases:
+  - Pod startup: missing secret -> CreateContainerConfigError
+  - Resume upload: missing GCS -> 500 ('Google Cloud Storage client not configured')
 ```
 
 ## Step-by-step Workflow Explanations

@@ -35,39 +35,26 @@ NOTE: STT/video processing integrations (Google STT, Whisper, ffmpeg-based worke
 
 ### A. Candidate Resume Upload & Processing
 
-```mermaid
-sequenceDiagram
-    participant C as Candidate
-    participant F as Frontend
-    participant A as FastAPI
-    participant S as GCS
-    participant Q as Redis Queue
-    participant W as Resume Worker
-    participant P as Pinecone
-    participant D as MongoDB
-    participant WS as WebSocket
+```
+Candidate -> Frontend: Upload Resume + Consent
+Frontend -> API (FastAPI): POST /resume/upload (JWT)
+API: Verify JWT & Role
+API -> GCS: Store file
+API -> MongoDB: Create JobStatus (PENDING)
+API -> Redis Queue: Enqueue process_resume()
+API -> Frontend: Return job_id (202)
 
-    C->>F: Upload Resume + Consent
-    F->>A: POST /resume/upload (JWT)
-    A->>A: Verify JWT & Role
-    A->>S: Store File in GCS
-    A->>D: Create JobStatus (PENDING)
-    A->>Q: Enqueue process_resume()
-    A->>F: Return job_id (202)
-    
-    Q->>W: Process Resume Task
-    W->>S: Download File
-    W->>W: Extract Text (pdfminer/docx)
-    W->>W: Parse Resume (spaCy NER)
-    W->>A: Check Embedding Cache
-    alt Cache Miss
-        W->>P: Create Embedding
-        W->>P: Upsert Vector + Metadata
-    end
-    W->>D: Save Candidate Document
-    W->>D: Update JobStatus (COMPLETED)
-    W->>WS: Publish Event
-    WS->>F: Real-time Update
+Worker (Celery) picks up task from Redis Queue:
+  Worker -> GCS: Download file
+  Worker: Extract text (pdfminer/docx)
+  Worker: Parse resume (spaCy NER)
+  Worker: Check embedding cache
+    if cache miss:
+      Worker -> Pinecone: Create embedding and upsert vector + metadata
+  Worker -> MongoDB: Save candidate document
+  Worker -> MongoDB: Update JobStatus (COMPLETED)
+  Worker -> WebSocket: Publish event
+  WebSocket -> Frontend: Real-time update
 ```
 
 **Key Steps:**
@@ -91,17 +78,16 @@ This section documents recent changes made to stabilize the deployment, fix fron
 - **Docs & troubleshooting:** Expanded `backend/README.md` with exact `kubectl` commands to create/patch secrets, restart deployments, and test GCS connectivity using `backend/test_gcp.py`.
 
 ### Architecture Diagram
-```mermaid
-graph TD
-  Frontend[Frontend (Vercel & Browser)] -->|HTTPS| FastAPI[FastAPI API (GKE)]
-  FastAPI -->|enqueue| Redis[Redis (Celery broker)]
-  FastAPI -->|store files| GCS[Google Cloud Storage]
-  Redis -->|tasks| Worker[Celery Workers]
-  Worker -->|download/process| GCS
-  Worker -->|embeddings| Pinecone[Pinecone]
-  Worker -->|persist| MongoDB[MongoDB Atlas]
-  FastAPI -->|websockets| WebSocket[WebSocket Manager]
-  WebSocket --> Frontend
+```
+Frontend (Vercel) --HTTPS--> FastAPI (GKE)
+FastAPI --enqueue--> Redis (Celery broker)
+FastAPI --store files--> GCS (Google Cloud Storage)
+Redis --tasks--> Worker (Celery)
+Worker --download/process--> GCS
+Worker --embeddings--> Pinecone
+Worker --persist--> MongoDB (Atlas)
+FastAPI --websockets--> WebSocket Manager
+WebSocket Manager --updates--> Frontend
 ```
 
 ### How to reproduce the previously-seen GCS failure
@@ -195,19 +181,18 @@ If you want I will create `docs/deployment.md` that includes a GitHub Actions wo
 
 ### B. Job Creation & Candidate Matching
 
-```mermaid
-sequenceDiagram
-    participant R as Recruiter
-    participant A as FastAPI
-    participant D as MongoDB
-    participant Q as Redis Queue
-    participant W as Scoring Worker
-    participant P as Pinecone
-    participant L as LLM
-    participant C as Redis Cache
+```
+Recruiter -> API (FastAPI): POST /job/create (JWT)
+API: Verify HR/Admin role
+API -> MongoDB: Create Job document
+API -> Redis Queue: Enqueue job.match task
 
-    R->>A: POST /job/create (JWT)
-    A->>A: Verify HR/Admin Role
+Scoring Worker picks task from Redis Queue:
+  - Scoring Worker -> Pinecone: Query embeddings
+  - Scoring Worker -> LLM: Batch scoring for top candidates
+  - Scoring Worker -> Redis Cache: Cache top-N matches
+  - Scoring Worker -> MongoDB: Persist match results
+```
     A->>D: Create Job Document
     A->>A: Generate JD Embedding
     A->>D: Store Job + Embedding
@@ -249,26 +234,18 @@ Video and audio interview processing (upload → ffmpeg extraction → STT trans
 
 ### D. Role-Based Chatbot Assistant
 
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant A as FastAPI
-    participant D as MongoDB
-    participant L as LLM
+```
+User -> FastAPI: POST /chat/query
+FastAPI: Verify JWT & Extract Role
+FastAPI: Check Query Intent
 
-    U->>A: POST /chat/query
-    A->>A: Verify JWT & Extract Role
-    A->>A: Check Query Intent
-    
-    alt Database Query (leave, salary, etc.)
-        A->>D: Query Employee Data
-        A->>U: Return Structured Answer
-    else AI Query
-        A->>L: Role-Specific Prompt
-        L->>A: Natural Language Response
-        A->>A: Sanitize Output
-        A->>U: Return Response
-    end
+If intent needs DB data (leave, salary):
+  FastAPI -> MongoDB: Query employee data
+  FastAPI -> User: Return structured answer
+Else (AI-based response):
+  FastAPI -> LLM: Role-specific prompt
+  LLM -> FastAPI: Return natural language response
+  FastAPI -> User: Return AI answer
 ```
 
 **Role-Specific Responses:**
@@ -796,13 +773,12 @@ This project uses Docker both for local development (via `docker-compose`) and f
   - CI (Cloud Build / GitHub Actions) should build and push images to Artifact Registry (e.g., `us-central1-docker.pkg.dev/$PROJECT/auralis-repo/auralis-api:$TAG`) for GKE deployments.
 
 ### Docker flow (development → CI → GKE)
-```mermaid
-flowchart LR
-  Dev[Developer Laptop] -->|docker-compose| LocalInfra[Redis and Mongo]
-  Dev -->|docker build| LocalImage[API and Worker Images]
-  CI[GitHub Actions and Cloud Build] -->|build/push| Registry[Artifact Registry and GCR]
-  Registry -->|deploy| GKE[GKE Cluster]
-  LocalInfra --> DevServices[API and Worker (local)]
+```
+Developer Laptop --docker-compose--> Local Redis & Mongo
+Developer Laptop --docker build--> API & Worker Images
+CI (GitHub Actions / Cloud Build) --build/push--> Artifact Registry
+Artifact Registry --deploy--> GKE Cluster
+Local Redis & Mongo --used by--> Local API & Worker (dev)
 ```
 
 ### Docker Deployment

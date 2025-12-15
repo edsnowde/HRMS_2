@@ -186,34 +186,26 @@ A comprehensive Human Resource Management System (HRMS) with Applicant Tracking 
   This project showcases backend engineering and deployment practices: a FastAPI backend + Celery workers deployed on GKE, files stored in Google Cloud Storage (GCS), and a frontend hosted on Vercel which proxies API calls to the backend.
 
   ### **Concise Architecture**
-  ```mermaid
-  graph LR
-    subgraph CI
-      A[GitHub Actions and Cloud Build]
-    end
-    A --> B[Build images & push to Artifact Registry]
-    B --> C[GKE Cluster]
-    subgraph GKE[GKE]
-      D[auralis-api (FastAPI)]
-      D --> Auth[Auth]
-      D --> ResumeUpload[Resume upload]
-      D --> InterviewAPIs[Interview APIs]
+  ```
+  [Developer/CI] -> Build & Push Images -> Artifact Registry
+                       |
+                       v
+                    GKE Cluster
+  GKE: auralis-api (FastAPI)
+    - Auth (Firebase)
+    - Resume upload -> GCS
+    - Enqueue -> Redis (Celery)
+    - Job endpoints -> MongoDB
+    - WebSocket manager
 
-      E[auralis-worker (Celery)]
-      E --> ResumeParsing[Resume parsing]
-      E --> PineconeEmbedding[Pinecone embedding]
-      E --> GeminiScoring[Gemini scoring]
+  GKE: auralis-worker (Celery)
+    - Listens to Redis queues
+    - Processes resumes (GCS -> parse -> embed -> Pinecone)
+    - Persists results -> MongoDB
 
-      EX[Redis and Mongo and GCS (external)]
-    end
-    C --> GKE
-    D --> F[auralis-gcp-key Secret mounted at /var/secrets/gcp/key.json]
-    E --> F[auralis-gcp-key Secret mounted at /var/secrets/gcp/key.json]
-    D --> G[auralis-secrets (env values)]
-    E --> G[auralis-secrets (env values)]
-    D --> H[GCS (resumes, files)]
-    E --> H[GCS (resumes, files)]
-    Vercel[Vercel] -->|rewrite /api| D
+  Shared infra: Redis, MongoDB, GCS
+  Frontend (Vercel) -> rewrites /api -> auralis-api
+  Observability: Prometheus/Grafana and Cloud Logging
   ```
 
   ### **GCP deployment details**
@@ -239,13 +231,12 @@ A comprehensive Human Resource Management System (HRMS) with Applicant Tracking 
     - Push: `docker push us-central1-docker.pkg.dev/$PROJECT/auralis-repo/auralis-api:latest`
 
   ### Docker flowchart
-  ```mermaid
-  flowchart LR
-    Dev[Developer Laptop] -->|docker-compose| LocalInfra[Redis and Mongo]
-    Dev -->|docker build| LocalImage[API and Worker Images]
-    CI -->|build/push| Registry[Artifact Registry and GCR]
-    Registry -->|deploy| GKE[GKE Cluster]
-    LocalInfra --> DevServices[API and Worker (local)]
+  ```
+  Developer Laptop --docker-compose--> Local Redis & Mongo
+  Developer Laptop --docker build--> API & Worker Images
+  CI (GitHub Actions / Cloud Build) --build/push--> Artifact Registry
+  Artifact Registry --deploy--> GKE Cluster
+  Local Redis & Mongo --used by--> Local API & Worker (dev)
   ```
 
   ### **Vercel frontend notes**
